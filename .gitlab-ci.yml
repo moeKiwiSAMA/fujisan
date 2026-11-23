@@ -1,0 +1,91 @@
+# GitLab CI pipeline for Fujisan OS (SPX4-MF Linux)
+# Supports:
+# 1. Automated pull-sync from GitHub on GitLab Community Edition via Pipeline Schedules
+#    (set masked CI variable GITLAB_SYNC_TOKEN with write_repository scope).
+# 2. Full verification & build pipeline on every push, MR, tag, or web trigger:
+#    host driver + userland tests, DTB compilation (<= 256 KiB), freestanding pure-ARM32
+#    (0-Thumb) apps, deterministic offline initramfs (<= 5.25 MiB), offline apkovl,
+#    dual-format minimal SD2 image, and config/brand/hygiene/RASC-extractor checks.
+
+stages:
+  - sync
+  - verify_and_build
+
+variables:
+  DEBIAN_FRONTEND: "noninteractive"
+  UPSTREAM_GITHUB_URL: "https://github.com/moeKiwiSAMA/fujisan.git"
+  UPSTREAM_BRANCH: "main"
+
+sync_from_github:
+  stage: sync
+  image: alpine:3.21
+  tags:
+    - linux
+  variables:
+    GIT_STRATEGY: none
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$SYNC_FROM_GITHUB == "true"'
+  script:
+    - apk add --no-cache git ca-certificates
+    - |
+      if [ -z "${GITLAB_SYNC_TOKEN:-}" ]; then
+        echo "ERROR: Set masked CI/CD variable GITLAB_SYNC_TOKEN (Project Access Token with write_repository scope)." >&2
+        exit 1
+      fi
+    - rm -rf /tmp/fujisan-mirror
+    - git clone --mirror "$UPSTREAM_GITHUB_URL" /tmp/fujisan-mirror
+    - cd /tmp/fujisan-mirror
+    - |
+      TARGET_URL="https://oauth2:${GITLAB_SYNC_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
+      git remote add gitlab "$TARGET_URL"
+      git fetch gitlab "+refs/heads/${UPSTREAM_BRANCH}:refs/remotes/gitlab/${UPSTREAM_BRANCH}" || true
+      GH_SHA=$(git rev-parse "refs/heads/${UPSTREAM_BRANCH}")
+      GL_SHA=$(git rev-parse "refs/remotes/gitlab/${UPSTREAM_BRANCH}" 2>/dev/null || echo "none")
+      echo "GitHub ${UPSTREAM_BRANCH}: ${GH_SHA}"
+      echo "GitLab ${UPSTREAM_BRANCH}: ${GL_SHA}"
+      if [ "$GH_SHA" != "$GL_SHA" ]; then
+        git push gitlab "refs/heads/${UPSTREAM_BRANCH}:refs/heads/${UPSTREAM_BRANCH}"
+        git push gitlab --tags
+        echo "Synced ${UPSTREAM_BRANCH} (${GL_SHA} -> ${GH_SHA}) from GitHub to GitLab."
+      else
+        echo "Already up to date with GitHub (${GH_SHA})."
+      fi
+
+fujisan_spx4_ci:
+  stage: verify_and_build
+  image: ubuntu:24.04
+  tags:
+    - linux
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: never
+    - if: '$SYNC_FROM_GITHUB == "true"'
+      when: never
+    - when: on_success
+  script:
+    - |
+      if ! command -v gcc >/dev/null 2>&1 || ! command -v dtc >/dev/null 2>&1 || ! command -v arm-linux-gnueabihf-gcc >/dev/null 2>&1 || ! command -v mkfs.vfat >/dev/null 2>&1 || ! command -v mcopy >/dev/null 2>&1; then
+        apt-get update -qq
+        apt-get install -y -qq --no-install-recommends \
+          build-essential device-tree-compiler \
+          gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf \
+          cpio gzip dosfstools mtools python3 git
+      fi
+    - make all
+    - sha256sum build/out/initramfs.cpio.gz > /tmp/fujisan_initrd_sha1.txt
+    - ./scripts/build-initramfs.sh --offline --output build/out/initramfs.cpio.gz
+    - sha256sum -c /tmp/fujisan_initrd_sha1.txt
+    - ./scripts/build-rootfs.sh --offline-apkovl
+    - ls -lh build/ci/fujisan-spx4-mf.dtb build/ci/fujisan-home build/ci/fujisan-cam build/ci/fujisan-term build/out/initramfs.cpio.gz build/out/fujisan.apkovl.tar.gz build/sd2-fujisan.img
+  artifacts:
+    name: "fujisan-os-ci-${CI_COMMIT_SHORT_SHA}"
+    expire_in: 14 days
+    paths:
+      - build/ci/fujisan-spx4-mf.dtb
+      - build/ci/fujisan-home
+      - build/ci/fujisan-cam
+      - build/ci/fujisan-term
+      - build/out/initramfs.cpio.gz
+      - build/out/fujisan.apkovl.tar.gz
+      - build/sd2-fujisan.img
