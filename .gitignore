@@ -1,0 +1,24 @@
+# Build outputs & generated images (never commit binaries/images)
+build/
+dist/
+.tools/
+
+# Compiled artifacts & temporary files
+*.o
+*.ko
+*.a
+*.so
+*.dtb
+*.img
+*.squashfs
+*.cpio
+*.cpio.gz
+*.tar.gz
+*.tar.xz
+*.bin
+*.elf
+*.log
+__pycache__/
+*.pyc
+.DS_Store
+*~

@@ -1,0 +1,557 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Fujisan OS Device Tree Source for SPX4-MF Medium-Format Camera (SPX4 Quad-Core Cortex-A7)
+ *
+ * 100% compatible with BANBANINJ (B:\BANBANINJ) FDT v17 in-place fixups:
+ *   - /chosen/bootargs (trailing-space padded for in-place cmdline patch)
+ *   - /chosen/linux,initrd-start, /chosen/linux,initrd-end
+ *   - /chosen/framebuffer0/reg
+ *   - /reserved-memory/framebuffer/reg
+ *   - uart0 status = "disabled" (retail clock-gate safety; enabled only by uart=1)
+ *
+ * SAFETY INVARIANT: Onboard QSPI NOR Flash (calibration/BKUP/factory firmware)
+ * is intentionally NOT exposed as a writable MTD partition in this Device Tree.
+ */
+
+/dts-v1/;
+
+/ {
+	model = "Fujisan OS on SPX4-MF Medium-Format Camera (SPX4)";
+	compatible = "fujisan,spx4-mf", "fujisan,spx4";
+	#address-cells = <1>;
+	#size-cells = <1>;
+	interrupt-parent = <&gic>;
+
+	aliases {
+		serial0 = &uart0;
+		serial1 = &uart1;
+		serial2 = &uart2;
+		i2c0 = &i2c0;
+		i2c1 = &i2c1;
+		i2c2 = &i2c2;
+		spi0 = &spi0;
+		spi1 = &spi1;
+		spi2 = &spi2;
+		spi4 = &spi4;
+		mmc0 = &sdhci0;
+		mmc1 = &sdhci1;
+		mmc2 = &sdio_wifi;
+	};
+
+	chosen {
+		/*
+		 * Default bootargs stay strictly on LCDC1 simplefb (console=tty0) because
+		 * retail SPX4-MF gates off UART0 (0xFFF3A000). Trailing spaces reserve
+		 * fixed in-place capacity for BANBANINJ fdt_fixup_spx4() when uart=1.
+		 */
+		bootargs = "console=tty0 nosmp loglevel=7 rdinit=/init                                                             ";
+		linux,initrd-start = <0x03100000>;
+		linux,initrd-end = <0x03100000>;
+
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		/* Rear LCD (LCDC1 @ 0xFFFA9000) OSD0 1024x768 early boot FB */
+		framebuffer0 {
+			compatible = "simple-framebuffer";
+			reg = <0x059ed000 0x00300000>;
+			width = <1024>;
+			height = <768>;
+			stride = <4096>;
+			format = "r8g8b8a8";
+			status = "okay";
+		};
+	};
+
+	/*
+	 * Safe contiguous DDR window (38 MiB default compatible with both
+	 * real 2 GiB hardware and spx4-emulator; on real hardware
+	 * users may expand via bootargs mem=2016M@0x02000000).
+	 */
+	memory@2000000 {
+		device_type = "memory";
+		reg = <0x02000000 0x02600000>;
+	};
+
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		/* Fixed node path /reserved-memory/framebuffer for BANBANINJ FDT fixup */
+		framebuffer {
+			reg = <0x059ed000 0x00300000>;
+			no-map;
+		};
+
+		/* 4-slot 600 KiB hardware PDAF DDR ring (0x2C4B0000, stride 0xD800, CMOS-RE-2 DAT) */
+		pdaf_ring: pdaf-ring@2c4b0000 {
+			reg = <0x2c4b0000 0x00096000>;
+			no-map;
+		};
+	};
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		enable-method = "fujisan,spx4-smp";
+
+		cpu0: cpu@0 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a7";
+			reg = <0>;
+			clock-frequency = <500000000>;
+		};
+
+		cpu1: cpu@1 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a7";
+			reg = <1>;
+			clock-frequency = <500000000>;
+		};
+
+		cpu2: cpu@2 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a7";
+			reg = <2>;
+			clock-frequency = <500000000>;
+		};
+
+		cpu3: cpu@3 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a7";
+			reg = <3>;
+			clock-frequency = <500000000>;
+		};
+	};
+
+	clocks {
+		clk_54m: clk54m {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <54000000>;
+			clock-output-names = "spx4-54m";
+		};
+
+		clk_24m: clk24m {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <24000000>;
+			clock-output-names = "spx4-24m";
+		};
+	};
+
+	soc {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		/* ARM GICv2 (CBAR=0xFFFF0000, GICD=0xFFFF1000, GICC=0xFFFF2000) */
+		gic: interrupt-controller@ffff1000 {
+			compatible = "fujisan,spx4-gic", "arm,cortex-a7-gic";
+			interrupt-controller;
+			#interrupt-cells = <3>;
+			reg = <0xffff1000 0x1000>,
+			      <0xffff2000 0x1000>;
+		};
+
+		/* 54 MHz 8-ch Interval Timer (Ch7-ONLY -> GIC SPI 64, + early LCDC1 VSYNC SPI 118) */
+		timer0: timer@fff3c300 {
+			compatible = "fujisan,spx4-timer";
+			reg = <0xfff3c300 0x50>;
+			interrupts = <0 32 1>, <0 86 1>;
+			clocks = <&clk_54m>;
+			clock-frequency = <54000000>;
+			fujisan,timer-channel = <7>;
+			fujisan,lcdc-commit-reg = <0xfffa9600>;
+			status = "okay";
+		};
+
+		/* 4-Layer Imaging Power-Domain & Clock Controller (CMOS-RE-4 DAT) */
+		spx4_pm: power-controller@fff42000 {
+			compatible = "fujisan,spx4-pm", "fujisan,spx4-keyed-io", "syscon";
+			reg = <0xfff42000 0x100>,
+			      <0xfff48300 0x400>,
+			      <0xff70f000 0x100>,
+			      <0xfff49500 0x300>;
+			reg-names = "keyed-io", "rstclk", "axiclk", "sysbridge";
+			#power-domain-cells = <1>;
+			status = "okay";
+		};
+
+		/* Main Serial Console UART0 (ttyFUJI0, GIC SPI 254 = <0 222 4>).
+		 * Disabled by default for retail silicon safety (UART0 clock-gated). */
+		uart0: serial@fff3a000 {
+			compatible = "fujisan,spx4-uart";
+			reg = <0xfff3a000 0x3c>;
+			interrupts = <0 222 4>;
+			clocks = <&clk_54m>;
+			clock-frequency = <54000000>;
+			status = "disabled";
+		};
+
+		/* Auxiliary UART1 (ttyFUJI1, GIC SPI 253 = <0 221 4>) */
+		uart1: serial@fff39000 {
+			compatible = "fujisan,spx4-uart";
+			reg = <0xfff39000 0x3c>;
+			interrupts = <0 221 4>;
+			clocks = <&clk_54m>;
+			clock-frequency = <54000000>;
+			status = "disabled";
+		};
+
+		/* Bluetooth HCI H4 UART2 ("btuart", BCM43438A1, GIC SPI 255 = <0 223 4>) */
+		uart2: serial@fff3b000 {
+			compatible = "fujisan,spx4-uart";
+			reg = <0xfff3b000 0x3c>;
+			interrupts = <0 223 4>;
+			clocks = <&clk_54m>;
+			clock-frequency = <54000000>;
+			fujisan,enable-rx;
+			status = "okay";
+
+			bluetooth {
+				compatible = "brcm,bcm43438-bt";
+				max-speed = <1500000>;
+			};
+		};
+
+		/* 16-Bank x 16-Pin GPIO Controller (256 pins, linear bank*16 + pin) */
+		gpio: gpio@fff41000 {
+			compatible = "fujisan,spx4-gpio";
+			reg = <0xfff41000 0x400>;
+			gpio-controller;
+			#gpio-cells = <2>;
+			status = "okay";
+		};
+
+		/* 12-Channel 12-Bit Interleaved SAR ADC (0x555/0xAAA) */
+		adc: adc@fff40000 {
+			compatible = "fujisan,spx4-adc";
+			reg = <0xfff40000 0x48>;
+			#io-channel-cells = <1>;
+			status = "okay";
+		};
+
+		/* I2C0..I2C2 Byte-Mode Controllers */
+		i2c0: i2c@fff3d000 {
+			compatible = "fujisan,spx4-i2c";
+			reg = <0xfff3d000 0x20>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
+
+		i2c1: i2c@fff3e000 {
+			compatible = "fujisan,spx4-i2c";
+			reg = <0xfff3e000 0x20>;
+			interrupts = <0 34 4>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "okay";
+
+			eyesensor@39 {
+				compatible = "avago,apds9930";
+				reg = <0x39>;
+			};
+		};
+
+		i2c2: i2c@fff3f000 {
+			compatible = "fujisan,spx4-i2c";
+			reg = <0xfff3f000 0x20>;
+			interrupts = <0 35 4>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "okay";
+
+			touchscreen@55 {
+				compatible = "fujisan,spx4-touchscreen";
+				reg = <0x55>;
+				interrupts = <0 96 1>;
+				reset-gpios = <&gpio 114 0>;
+				touchscreen-size-x = <1024>;
+				touchscreen-size-y = <768>;
+			};
+		};
+
+		/* SPI0: GF-Mount Electronic Lens Controller (LENSCOM Frame32, IRQ 182) */
+		spi0: spi@fff32000 {
+			compatible = "fujisan,spx4-spi";
+			reg = <0xfff32000 0x28>;
+			clocks = <&clk_54m>;
+			clock-frequency = <54000000>;
+			fujisan,default-divider = <16>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "okay";
+
+			lenscom: lens@0 {
+				compatible = "fujisan,spx4-mf-lenscom";
+				reg = <0>;
+				spi-max-frequency = <4000000>;
+				mount-det-gpios = <&gpio 11 1>;   /* GPIO(0,11) active-LOW */
+				lens-pwr-gpios = <&gpio 240 0>;   /* GPIO(15,0) */
+				lens-rdy-gpios = <&gpio 241 0>;   /* GPIO(15,1) */
+				interrupts = <0 150 1>;           /* GIC SPI 182 */
+			};
+		};
+
+		/* SPI1: Power-Peer PMIC, Power Switch & Hardware RTC (CS GPIO 12.5 active-HIGH) */
+		spi1: spi@fff33000 {
+			compatible = "fujisan,spx4-spi";
+			reg = <0xfff33000 0x28>;
+			clocks = <&clk_54m>;
+			clock-frequency = <54000000>;
+			fujisan,default-divider = <28>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "okay";
+
+			power_peer: pmic@0 {
+				compatible = "fujisan,spx4-mf-power-peer";
+				reg = <0>;
+				spi-max-frequency = <2000000>;
+				cs-high-gpios = <&gpio 197 0>;
+			};
+		};
+
+		/* SPI2: BIS Sub-MCU (Mechanical Focal-Plane Shutter & IBIS, CMOS-RE-4 DAT) */
+		spi2: spi@fff34000 {
+			compatible = "fujisan,spx4-spi";
+			reg = <0xfff34000 0x28>;
+			clocks = <&clk_54m>;
+			clock-frequency = <54000000>;
+			fujisan,default-divider = <28>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "okay";
+		};
+
+		/* SPI4: Wolfson / Cirrus Logic WM8962 Audio Codec (16-bit, div 28) */
+		spi4: spi@fff36000 {
+			compatible = "fujisan,spx4-spi";
+			reg = <0xfff36000 0x28>;
+			clocks = <&clk_54m>;
+			clock-frequency = <54000000>;
+			fujisan,default-divider = <28>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "okay";
+
+			wm8962: audio-codec@0 {
+				compatible = "fujisan,spx4-mf-wm8962-spi";
+				reg = <0>;
+				spi-max-frequency = <2000000>;
+				#sound-dai-cells = <0>;
+				enable-gpios = <&gpio 211 0>;
+				reset-gpios = <&gpio 212 0>;
+			};
+		};
+
+		/* Sony IMX461 102MP Medium-Format CMOS Sensor (SPI Cmd Engine 0xFFF6C200, PD 2) */
+		imx461: camera-sensor@fff6c200 {
+			compatible = "fujisan,imx461";
+			reg = <0xfff6c200 0x44>;
+			xclr-gpios = <&gpio 69 0>;       /* GPIO(4,5) */
+			rail-a-gpios = <&gpio 71 0>;     /* GPIO(4,7) */
+			rail-b-gpios = <&gpio 194 0>;    /* GPIO(12,2) */
+			rst-pulse-gpios = <&gpio 15 0>;  /* GPIO(0,15) 10ms pulse */
+			sync0-gpios = <&gpio 81 0>;      /* GPIO(5,1) */
+			sync1-gpios = <&gpio 80 0>;      /* GPIO(5,0) */
+			power-domains = <&spx4_pm 2>;
+			status = "okay";
+		};
+
+		/* Dual-Bank 8-Lane SLVS-EC RX + PHY + CCDTG Timing Generator (PD 2) */
+		slvsec: slvsec@fff69000 {
+			compatible = "fujisan,spx4-slvsec";
+			reg = <0xfff69000 0x300>,
+			      <0xfff6a000 0x300>,
+			      <0xfff6b000 0x100>,
+			      <0xfff6c000 0x440>;
+			reg-names = "bank0", "bank1", "phy", "ccdtg";
+			interrupts = <0 264 4>, <0 266 4>, <0 265 4>, <0 68 1>, <0 70 1>;
+			interrupt-names = "ch0", "ch1", "err", "ccdtg0", "ccdtg1";
+			power-domains = <&spx4_pm 2>;
+			status = "okay";
+		};
+
+		/* CCDIF V4L2 Capture: Live RAW DMA + Semi-Planar Y+UV LV + 20-Ch 3A/PDAF Stats */
+		ccdif: isp@fff6e000 {
+			compatible = "fujisan,spx4-ccdif";
+			reg = <0xfff6e000 0x80>,
+			      <0xfff70000 0x2f0>,
+			      <0xfff72000 0x120>,
+			      <0xfff73000 0x120>,
+			      <0xfff74000 0x30>,
+			      <0xfff7d000 0x140>,
+			      <0xfff10000 0xe000>,
+			      <0xfff4a700 0xa0>;
+			reg-names = "raw-dma", "stats", "lv-ch0", "lv-ch1",
+				    "lv-ch2", "movdc", "stats-sram", "axi-hi";
+			interrupts = <0 73 1>, <0 74 1>, <0 75 1>,
+				     <0 76 1>, <0 77 1>, <0 78 4>;
+			interrupt-names = "raw", "stats", "lv0", "lv1", "lv2", "movdc";
+			memory-region = <&pdaf_ring>;
+			power-domains = <&spx4_pm 2>;
+			status = "okay";
+		};
+
+		/* Display: DRM/KMS Rear LCD (LCDC1 @ 0xFFFA9000) + EVF (LCDC0 @ 0xFFF7A000) */
+		display: drm@fffa9000 {
+			compatible = "fujisan,spx4-drm";
+			reg = <0xfffa9000 0x1000>,
+			      <0xfff7a000 0x1000>,
+			      <0xfff49700 0x4>;
+			reg-names = "lcdc1", "lcdc0", "clk-gate";
+			interrupts = <0 86 1>, <0 85 1>;
+			power-domains = <&spx4_pm 4>;
+			status = "okay";
+		};
+
+		/* Hardware JPEG Encoder (0xFFFA0000, IRQ 135) + Decoder (0xFFFA1000, IRQ 136) */
+		jpeg: jpeg@fffa0000 {
+			compatible = "fujisan,spx4-jpeg";
+			reg = <0xfffa0000 0x134>,
+			      <0xfffa1000 0x12c>,
+			      <0xfff4a740 0x8>;
+			reg-names = "encoder", "decoder", "dma-hi";
+			interrupts = <0 103 4>, <0 104 4>;
+			power-domains = <&spx4_pm 9>;
+			status = "okay";
+		};
+
+		/* Shoulder MIP Sub-LCD (304x230 1-bpp, soc-serial-engine ch1, IRQ 52) */
+		dotlcd: display@fff30020 {
+			compatible = "fujisan,spx4-dotlcd";
+			reg = <0xfff30020 0x10>;
+			interrupts = <0 20 4>;
+			cs-gpios = <&gpio 179 0>;
+			disp-gpios = <&gpio 180 0>;
+			backlight-gpios = <&gpio 198 0>;
+			status = "okay";
+		};
+
+		/* DMP PICA / M2D OpenVG VGLIB 2D Accelerator (GIC SPI 92) */
+		vglib: graphics@fffd0000 {
+			compatible = "fujisan,spx4-vglib";
+			reg = <0xfffd0000 0x2100>;
+			interrupts = <0 60 4>;
+			status = "okay";
+		};
+
+		/* ARM Mali-V61 4K H.265/H.264 VPU (NV12/10-bit Y0L2, PD 10, IRQ 138) */
+		mali_v61: video-codec@ffe00000 {
+			compatible = "fujisan,spx4-mali-v61";
+			reg = <0xffe00000 0x1000>;
+			interrupts = <0 106 4>;
+			power-domains = <&spx4_pm 10>;
+			status = "okay";
+		};
+
+		/* Dual-Channel I2S / PCM Audio Controllers */
+		i2s0: i2s@fff4f000 {
+			compatible = "fujisan,spx4-i2s";
+			reg = <0xfff4f000 0x30>;
+			#sound-dai-cells = <0>;
+			fujisan,i2s-mode-word = <0x1000254b>;
+			status = "okay";
+		};
+
+		i2s1: i2s@fff78000 {
+			compatible = "fujisan,spx4-i2s";
+			reg = <0xfff78000 0x30>;
+			#sound-dai-cells = <0>;
+			fujisan,i2s-mode-word = <0x1000252b>;
+			status = "okay";
+		};
+
+		/* Dual SDXC Card Slots & BCM43438A1 SDIO Wi-Fi */
+		sdhci0: mmc@fffc4000 {
+			compatible = "fujisan,spx4-sdhci";
+			reg = <0xfffc4000 0x100>;
+			interrupts = <0 198 4>;
+			cd-gpios = <&gpio 164 1>;
+			fujisan,addr-high-reg = <0xfff4a888>;
+			bus-width = <4>;
+			status = "okay";
+		};
+
+		sdhci1: mmc@fffc8000 {
+			compatible = "fujisan,spx4-sdhci";
+			reg = <0xfffc8000 0x100>;
+			interrupts = <0 203 4>;
+			cd-gpios = <&gpio 168 1>;
+			fujisan,addr-high-reg = <0xfff4a894>;
+			bus-width = <4>;
+			status = "okay";
+		};
+
+		sdio_wifi: mmc@fffc0000 {
+			compatible = "fujisan,spx4-sdhci";
+			reg = <0xfffc0000 0x100>;
+			interrupts = <0 192 4>;
+			bus-width = <4>;
+			non-removable;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "okay";
+
+			brcmf: wifi@1 {
+				compatible = "brcm,bcm4329-fmac";
+				reg = <1>;
+			};
+		};
+
+		/* Synopsys DWC3 USB 3.0 (DRD xHCI Host + ConfigFS NCM/UVC/MTP Gadget) */
+		usb_wrap: usb-wrap@ffb23800 {
+			compatible = "fujisan,spx4-dwc3";
+			reg = <0xffb23800 0x800>,
+			      <0xffb00000 0x10000>;
+			reg-names = "phy", "dwc3-probe";
+			#address-cells = <1>;
+			#size-cells = <1>;
+			ranges;
+			status = "okay";
+
+			dwc3: usb@ffb00000 {
+				compatible = "snps,dwc3";
+				reg = <0xffb00000 0x10000>;
+				interrupts = <0 214 4>;
+				dr_mode = "otg";
+				snps,dis_u2_susphy_quirk;
+				snps,dis_u3_susphy_quirk;
+				maximum-speed = "super-speed";
+				status = "okay";
+			};
+		};
+
+		/* SoC Die Temperature Sensor (hwmon) */
+		temperature: temperature@fff47810 {
+			compatible = "fujisan,spx4-temperature";
+			reg = <0xfff47810 0x44>;
+			status = "okay";
+		};
+	};
+
+	sound {
+		compatible = "fujisan,spx4-mf-audio";
+		fujisan,i2s-controller = <&i2s0>;
+		fujisan,audio-codec = <&wm8962>;
+		hp-det-gpios = <&gpio 132 0>;
+		mic-det-gpios = <&gpio 100 1>;
+		status = "okay";
+	};
+
+	rtc {
+		compatible = "fujisan,spx4-mf-rtc";
+		status = "okay";
+	};
+
+	input-keys {
+		compatible = "fujisan,spx4-mf-input";
+		status = "okay";
+	};
+};

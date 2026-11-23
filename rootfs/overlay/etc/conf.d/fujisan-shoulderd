@@ -1,0 +1,3 @@
+# Fujisan OS 304x230 Sharp MIP shoulder display daemon settings
+FUJISAN_SHOULDER_DEV="/dev/fujisan-shoulder"
+FUJISAN_SHOULDER_INTERVAL="5"

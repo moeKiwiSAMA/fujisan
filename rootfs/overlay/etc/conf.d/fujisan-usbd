@@ -1,0 +1,5 @@
+# Fujisan OS DWC3 USB gadget profile: ncm | ncm,uvc | ncm,mtp
+FUJISAN_USB_PROFILE="ncm"
+FUJISAN_USB_IP="172.16.42.1/24"
+FUJISAN_USB_VID="0x04cb"
+FUJISAN_USB_PID="0x02f0"

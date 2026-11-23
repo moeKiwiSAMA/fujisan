@@ -1,0 +1,39 @@
+#!/sbin/openrc-run
+# Fujisan OS — 304x230 Sharp MIP Shoulder LCD Status Daemon
+# Hardware: SPI1 Shoulder Display (0xFFF30020, 304x230 upright monochrome)
+
+name="fujisan-shoulderd"
+description="Update Fujisan OS 304x230 Sharp MIP shoulder LCD telemetry"
+pidfile="/run/${name}.pid"
+
+: "${FUJISAN_SHOULDER_DEV:=/dev/fujisan-shoulder}"
+: "${FUJISAN_SHOULDER_INTERVAL:=5}"
+
+depend() {
+    need localmount
+}
+
+start() {
+    ebegin "Starting ${name}"
+    (
+        echo $$ > "${pidfile}"
+        while true; do
+            if [ -w "${FUJISAN_SHOULDER_DEV}" ]; then
+                batt="$(cat /sys/class/power_supply/battery/capacity 2>/dev/null || echo '--')"
+                temp="$(cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null || echo '32000')"
+                printf 'FUJISAN OS | BAT:%s%% | T:%s | 304x230\n' "$batt" "$temp" > "${FUJISAN_SHOULDER_DEV}" 2>/dev/null || true
+            fi
+            sleep "${FUJISAN_SHOULDER_INTERVAL}"
+        done
+    ) >/dev/null 2>&1 &
+    eend 0
+}
+
+stop() {
+    ebegin "Stopping ${name}"
+    if [ -f "${pidfile}" ]; then
+        kill "$(cat "${pidfile}")" 2>/dev/null || true
+        rm -f "${pidfile}"
+    fi
+    eend 0
+}

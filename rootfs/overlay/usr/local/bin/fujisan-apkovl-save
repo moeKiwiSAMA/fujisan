@@ -1,0 +1,10 @@
+#!/bin/sh
+# Save /etc and /root configuration deltas into B:\banban\fujisan\fujisan.apkovl.tar.gz
+# for Alpine armv7 diskless persistence on SD Slot 2.
+set -eu
+OUT="${1:-/mnt/sd2/banban/fujisan/fujisan.apkovl.tar.gz}"
+mkdir -p "$(dirname "$OUT")"
+tar -czf "${OUT}.tmp" -C / etc root 2>/dev/null || tar -czf "${OUT}.tmp" -C / etc
+mv "${OUT}.tmp" "$OUT"
+sync
+echo "[fujisan-apkovl-save] Saved overlay snapshot to ${OUT}"

@@ -1,0 +1,6 @@
+#!/bin/sh
+# Sync SD1/SD2 cleanly and reboot back to stock SPX4-MF firmware.
+# Hold DISP/BACK during BANBANINJ splash to bypass Linux boot immediately.
+set -eu
+sync
+exec reboot -f

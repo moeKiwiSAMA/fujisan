@@ -1,0 +1,7 @@
+# Fujisan OS OpenRC inittab (UART0 disabled by default for retail clock safety)
+::sysinit:/sbin/openrc sysinit
+::sysinit:/sbin/openrc boot
+::wait:/sbin/openrc default
+tty1::respawn:/usr/local/bin/fujisan-home
+::ctrlaltdel:/sbin/reboot
+::shutdown:/sbin/openrc shutdown

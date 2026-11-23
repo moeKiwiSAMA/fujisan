@@ -1,0 +1,22 @@
+# Fujisan OS — Alpine Linux armv7 Rootfs Package Manifest
+# Target: SPX4-MF (quad-core Cortex-A7, pure ARM32)
+
+alpine-base
+alpine-baselayout
+busybox
+busybox-openrc
+openrc
+musl
+musl-utils
+e2fsprogs
+dosfstools
+squashfs-tools
+v4l-utils
+libjpeg-turbo-utils
+usbutils
+iproute2
+openssh-server
+dropbear
+udev
+eudev
+kbd-bkeymaps

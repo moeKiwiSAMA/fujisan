@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config VIDEO_FUJI_SPX4_JPEG
+	tristate "Fujisan SPX4 Hardware JPEG Encoder & Decoder V4L2 M2M"
+	depends on VIDEO_DEV && OF
+	select VIDEOBUF2_DMA_CONTIG
+	select V4L2_MEM2MEM_DEV
+	help
+	  V4L2 memory-to-memory driver for the SPX4-MF Medium-Format Camera SPX4 hardware
+	  JPEG encoder (0xFFFA0000, GIC IRQ 135, 34-bit DMA 0xFFF4A740/44)
+	  and hardware JPEG decoder (0xFFFA1000, GIC IRQ 136).

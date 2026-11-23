@@ -1,0 +1,74 @@
+#!/bin/sh
+# Fujisan OS Stage-1 initramfs /init
+# Supports:
+#   1. Alpine armv7 diskless boot with B:\banban\fujisan\rootfs.squashfs
+#   2. Writable persistence via overlay.img (ext4) OR fujisan.apkovl.tar.gz (tmpfs)
+#   3. SD1 (/mnt/sd1) mount for DCIM/100_FJOS captures
+#   4. Strict NOR Flash read-only calibration safety (never touches mtd/BKUP)
+#   5. Graceful fallback to pure-ARM32 /usr/local/bin/fujisan-home
+
+set -u
+
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+mount -t proc proc /proc 2>/dev/null || true
+mount -t sysfs sysfs /sys 2>/dev/null || true
+mount -t devtmpfs devtmpfs /dev 2>/dev/null || true
+mkdir -p /dev/pts /dev/shm /run /tmp /mnt/sd1 /mnt/sd2 /mnt/ro /mnt/rw /newroot
+mount -t devpts devpts /dev/pts 2>/dev/null || true
+mount -t tmpfs tmpfs /run 2>/dev/null || true
+mount -t tmpfs tmpfs /tmp 2>/dev/null || true
+
+# Mount SD Slot 2 (Fujisan OS media) and SD Slot 1 (DCIM media) if present
+mount_sd_dev() {
+    dev="$1"
+    target="$2"
+    if [ -b "$dev" ]; then
+        mount -t vfat -o rw,utf8,shortname=mixed "$dev" "$target" 2>/dev/null || \
+        mount -o rw "$dev" "$target" 2>/dev/null || true
+    fi
+}
+
+mount_sd_dev /dev/mmcblk1p1 /mnt/sd2
+mount_sd_dev /dev/mmcblk1 /mnt/sd2
+mount_sd_dev /dev/mmcblk0p1 /mnt/sd1
+mount_sd_dev /dev/mmcblk0 /mnt/sd1
+
+FUJISAN_DIR="/mnt/sd2/banban/fujisan"
+SQUASHFS="${FUJISAN_DIR}/rootfs.squashfs"
+OVERLAY_IMG="${FUJISAN_DIR}/overlay.img"
+APKOVL="${FUJISAN_DIR}/fujisan.apkovl.tar.gz"
+
+if [ -f "$SQUASHFS" ]; then
+    if mount -t squashfs -o ro,loop "$SQUASHFS" /mnt/ro 2>/dev/null; then
+        # Writable upper layer: persistent ext4 overlay.img if available, else RAM tmpfs
+        if [ -f "$OVERLAY_IMG" ] && mount -t ext4 -o rw,loop "$OVERLAY_IMG" /mnt/rw 2>/dev/null; then
+            :
+        else
+            mount -t tmpfs tmpfs /mnt/rw 2>/dev/null || true
+        fi
+        mkdir -p /mnt/rw/upper /mnt/rw/work
+
+        if mount -t overlay overlay \
+            -o "lowerdir=/mnt/ro,upperdir=/mnt/rw/upper,workdir=/mnt/rw/work" \
+            /newroot 2>/dev/null; then
+            # Apply optional Alpine diskless apkovl archive
+            if [ -f "$APKOVL" ]; then
+                tar -xzf "$APKOVL" -C /newroot 2>/dev/null || true
+            fi
+            mkdir -p /newroot/mnt/sd1 /newroot/mnt/sd2
+            mount --move /mnt/sd1 /newroot/mnt/sd1 2>/dev/null || true
+            mount --move /mnt/sd2 /newroot/mnt/sd2 2>/dev/null || true
+            if [ -x /newroot/sbin/init ]; then
+                exec switch_root /newroot /sbin/init
+            fi
+        fi
+    fi
+fi
+
+# Fallback: launch freestanding pure-ARM32 Fujisan Home directly from Stage-1
+if [ -x /usr/local/bin/fujisan-home ]; then
+    exec /usr/local/bin/fujisan-home
+fi
+
+exec /bin/sh

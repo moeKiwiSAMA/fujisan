@@ -1,0 +1,50 @@
+# GitHub Actions CI for Fujisan OS (SPX4-MF Linux)
+# Runs host driver + userland tests, DTB compilation (<= 256 KiB),
+# freestanding pure-ARM32 (0-Thumb) apps, deterministic offline initramfs (<= 5.25 MiB),
+# dual-format minimal SD2 build, and config/brand/hygiene/RASC-extractor checks.
+
+name: Fujisan OS CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install ARM32 cross toolchain and image tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            build-essential device-tree-compiler \
+            gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf \
+            cpio gzip dosfstools mtools python3
+
+      - name: Run full Fujisan OS verification suite (make all)
+        run: make all
+
+      - name: Verify bit-for-bit deterministic offline initramfs
+        run: |
+          sha256sum build/out/initramfs.cpio.gz > /tmp/fujisan_initrd_sha1.txt
+          ./scripts/build-initramfs.sh --offline --output build/out/initramfs.cpio.gz
+          sha256sum -c /tmp/fujisan_initrd_sha1.txt
+
+      - name: Build offline apkovl archive
+        run: ./scripts/build-rootfs.sh --offline-apkovl
+
+      - name: Upload CI build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: fujisan-os-ci
+          path: |
+            build/ci/fujisan-spx4-mf.dtb
+            build/ci/fujisan-home
+            build/ci/fujisan-cam
+            build/ci/fujisan-term
+            build/out/initramfs.cpio.gz
+            build/out/fujisan.apkovl.tar.gz

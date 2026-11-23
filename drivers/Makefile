@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: GPL-2.0-only
+ccflags-y += -I$(srctree)/drivers/mmc/host -I$(srctree)/drivers/fujisan-spx4/include
+
+obj-$(CONFIG_TIMER_FUJI_SPX4)		+= clocksource/timer-fuji-spx4.o
+obj-$(CONFIG_SERIAL_FUJI_SPX4)		+= tty/serial/fuji-spx4-uart.o
+obj-$(CONFIG_SMP_FUJI_SPX4)		+= arch/fuji-spx4-smp.o
+obj-$(CONFIG_PM_FUJISAN_SPX4)		+= soc/fujisan/fujisan-spx4-pm.o
+obj-$(CONFIG_GPIO_FUJI_SPX4)		+= gpio/gpio-fuji-spx4.o
+obj-$(CONFIG_ADC_FUJI_SPX4)		+= iio/adc/fuji-spx4-adc.o
+obj-$(CONFIG_I2C_FUJI_SPX4)		+= i2c/busses/i2c-fuji-spx4.o
+obj-$(CONFIG_SPI_FUJI_SPX4)		+= spi/spi-fuji-spx4.o
+obj-$(CONFIG_DRM_FUJI_SPX4)		+= gpu/drm/fuji-spx4/fuji-spx4-drm.o
+obj-$(CONFIG_FUJI_SPX4_VGLIB)		+= gpu/drm/fuji-spx4/fuji-spx4-vglib.o
+obj-$(CONFIG_FB_FUJI_SPX4_DOTLCD)	+= auxdisplay/fuji-spx4-dotlcd.o
+obj-$(CONFIG_VIDEO_FUJISAN_IMX461)	+= media/i2c/fujisan-imx461.o
+obj-$(CONFIG_VIDEO_FUJISAN_SLVSEC)	+= media/platform/fujisan-isp/fujisan-slvsec.o
+obj-$(CONFIG_VIDEO_FUJISAN_CCDIF)	+= media/platform/fujisan-isp/fujisan-ccdif-v4l2.o
+obj-$(CONFIG_VIDEO_FUJISAN_LENSCOM)	+= media/platform/fujisan-lens/fujisan-lenscom.o
+obj-$(CONFIG_VIDEO_FUJISAN_MALI_V61)	+= media/platform/fujisan-mali-v61/fujisan-mali-v61.o
+obj-$(CONFIG_VIDEO_FUJI_SPX4_JPEG)	+= media/platform/fuji-spx4-jpeg/
+obj-$(CONFIG_TOUCHSCREEN_FUJI_SPX4)	+= input/touchscreen/fuji-spx4-touch.o
+obj-$(CONFIG_INPUT_FUJI_SPX4)		+= input/misc/fuji-spx4-input.o
+obj-$(CONFIG_SND_SOC_FUJI_SPX4_I2S)	+= sound/fuji-spx4-i2s.o
+obj-$(CONFIG_SND_SOC_FUJI_WM8962_SPI)	+= sound/fuji-wm8962-spi.o
+obj-$(CONFIG_SND_SOC_FUJISAN_SPX4_AUDIO)	+= sound/fujisan-spx4-audio.o
+obj-$(CONFIG_MMC_SDHCI_FUJI_SPX4)	+= mmc/host/sdhci-fuji-spx4.o
+obj-$(CONFIG_POWER_FUJI_SPX4)		+= power/supply/fuji-spx4-power.o
+obj-$(CONFIG_RTC_DRV_FUJI_SPX4)		+= rtc/rtc-fuji-spx4.o
+obj-$(CONFIG_SENSORS_FUJI_SPX4_TEMP)	+= hwmon/fuji-spx4-temp.o
+obj-$(CONFIG_USB_DWC3_FUJI_SPX4)	+= usb/dwc3/dwc3-fuji-spx4.o

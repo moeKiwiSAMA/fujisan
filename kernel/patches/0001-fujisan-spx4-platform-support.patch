@@ -1,0 +1,221 @@
+--- a/arch/arm/mm/Kconfig
++++ b/arch/arm/mm/Kconfig
+@@ -678,6 +678,17 @@
+ 	def_bool y
+ 	depends on ARM_LPAE && ARM_PATCH_PHYS_VIRT && ARCH_KEYSTONE
+ 
++config ARM_FUJI_SPX4_VBAR
++	bool "Use VBAR=0xFFFF0000 with SCTLR.V=0 (Fujisan SPX4)"
++	depends on CPU_V7 && MMU
++	select ARM_GIC
++	select MULTI_IRQ_HANDLER
++	select GENERIC_ATOMIC64
++	help
++	  Keep SCTLR.V clear and program VBAR=0xFFFF0000 in early_trap_init().
++	  This keeps high exception vectors at 0xFFFF0000 while preserving
++	  SCTLR.V=0 on Cortex-A7 SPX4 hardware and spx4-emulator.
++
+ config ARM_THUMB
+ 	bool "Support Thumb user binaries" if !CPU_THUMBONLY && EXPERT
+ 	depends on CPU_THUMB_CAPABLE && !CPU_32v4
+--- a/arch/arm/mm/proc-v7.S
++++ b/arch/arm/mm/proc-v7.S
+@@ -551,6 +551,14 @@
+ 	orr     r3, r3, #(1 << 10)              @ set SW bit in "clear"
+ 	bic     r6, r6, #(1 << 10)              @ clear it in "mmuset"
+ #endif
++#ifdef CONFIG_ARM_FUJI_SPX4_VBAR
++	orr     r3, r3, #(1 << 13)              @ clear SCTLR.V (use VBAR instead)
++	bic     r6, r6, #(1 << 13)              @ clear CR_V in "mmuset"
++	movw    r0, #0x0000
++	movt    r0, #0xffff
++	mcr     p15, 0, r0, c12, c0, 0          @ program VBAR=0xFFFF0000 before MMU on
++	isb
++#endif
+    	mrc	p15, 0, r0, c1, c0, 0		@ read control register
+ 	bic	r0, r0, r3			@ clear bits them
+ 	orr	r0, r0, r6			@ set them
+--- a/arch/arm/include/asm/cp15.h
++++ b/arch/arm/include/asm/cp15.h
+@@ -42,7 +42,9 @@
+ 
+ #ifndef __ASSEMBLY__
+ 
+-#if __LINUX_ARM_ARCH__ >= 4
++#if defined(CONFIG_ARM_FUJI_SPX4_VBAR)
++#define vectors_high()	(1)
++#elif __LINUX_ARM_ARCH__ >= 4
+ #define vectors_high()	(get_cr() & CR_V)
+ #else
+ #define vectors_high()	(0)
+--- a/arch/arm/kernel/traps.c
++++ b/arch/arm/kernel/traps.c
+@@ -888,6 +888,10 @@
+ 	kuser_init(vectors_base);
+ 
+ 	flush_vectors(vectors_base, 0, PAGE_SIZE * 2);
++#ifdef CONFIG_ARM_FUJI_SPX4_VBAR
++	asm volatile("mcr p15, 0, %0, c12, c0, 0\n\tisb"
++		     : : "r" (0xffff0000UL) : "memory");
++#endif
+ }
+ #else /* ifndef CONFIG_CPU_V7M */
+ void __init early_trap_init(void *vectors_base)
+--- a/arch/arm/include/asm/cmpxchg.h
++++ b/arch/arm/include/asm/cmpxchg.h
+@@ -246,6 +246,17 @@
+ 					     unsigned long long old,
+ 					     unsigned long long new)
+ {
++#ifdef CONFIG_GENERIC_ATOMIC64
++	unsigned long flags;
++	unsigned long long oldval;
++
++	raw_local_irq_save(flags);
++	oldval = *ptr;
++	if (oldval == old)
++		*ptr = new;
++	raw_local_irq_restore(flags);
++	return oldval;
++#else
+ 	unsigned long long oldval;
+ 	unsigned long res;
+ 
+@@ -265,6 +276,7 @@
+ 	: "cc");
+ 
+ 	return oldval;
++#endif
+ }
+ 
+ #define arch_cmpxchg64_relaxed(ptr, o, n) ({				\
+--- a/arch/arm/kernel/entry-armv.S
++++ b/arch/arm/kernel/entry-armv.S
+@@ -404,7 +404,7 @@
+ 	.endm
+ 
+ 	.macro	kuser_cmpxchg_check
+-#if !defined(CONFIG_CPU_32v6K) && defined(CONFIG_KUSER_HELPERS)
++#if (!defined(CONFIG_CPU_32v6K) || defined(CONFIG_GENERIC_ATOMIC64)) && defined(CONFIG_KUSER_HELPERS)
+ #ifndef CONFIG_MMU
+ #warning "NPTL on non MMU needs fixing"
+ #else
+@@ -678,7 +678,7 @@
+ 
+ __kuser_cmpxchg64:				@ 0xffff0f60
+ 
+-#if defined(CONFIG_CPU_32v6K)
++#if defined(CONFIG_CPU_32v6K) && !defined(CONFIG_GENERIC_ATOMIC64)
+ 
+ 	stmfd	sp!, {r4, r5, r6, r7}
+ 	ldrd	r4, r5, [r0]			@ load old val
+@@ -695,7 +695,7 @@
+ 	ldmfd	sp!, {r4, r5, r6, r7}
+ 	usr_ret	lr
+ 
+-#elif !defined(CONFIG_SMP)
++#elif !defined(CONFIG_SMP) || defined(CONFIG_GENERIC_ATOMIC64)
+ 
+ #ifdef CONFIG_MMU
+--- a/drivers/irqchip/irq-gic-common.h
++++ b/drivers/irqchip/irq-gic-common.h
+@@ -21,6 +21,8 @@
+ 
+ int gic_configure_irq(unsigned int irq, unsigned int type,
+                        void __iomem *base, void (*sync_access)(void));
++extern bool gic_spx4_quirk;
++
+ void gic_dist_config(void __iomem *base, int gic_irqs,
+ 		     void (*sync_access)(void));
+ void gic_cpu_config(void __iomem *base, int nr, void (*sync_access)(void));
+--- a/drivers/irqchip/irq-gic-common.c
++++ b/drivers/irqchip/irq-gic-common.c
+@@ -11,6 +11,7 @@
+ #include "irq-gic-common.h"
+ 
+ static DEFINE_RAW_SPINLOCK(irq_controller_lock);
++bool gic_spx4_quirk;
+ 
+ void gic_enable_of_quirks(const struct device_node *np,
+ 			  const struct gic_quirk *quirks, void *data)
+@@ -113,8 +114,9 @@
+ 	 * alone as they are in the redistributor registers on GICv3.
+ 	 */
+ 	for (i = 32; i < gic_irqs; i += 32) {
+-		writel_relaxed(GICD_INT_EN_CLR_X32,
+-			       base + GIC_DIST_ACTIVE_CLEAR + i / 8);
++		if (!gic_spx4_quirk)
++			writel_relaxed(GICD_INT_EN_CLR_X32,
++				       base + GIC_DIST_ACTIVE_CLEAR + i / 8);
+ 		writel_relaxed(GICD_INT_EN_CLR_X32,
+ 			       base + GIC_DIST_ENABLE_CLEAR + i / 8);
+ 	}
+@@ -132,8 +134,9 @@
+ 	 * private interrupts. Make sure everything is deactivated.
+ 	 */
+ 	for (i = 0; i < nr; i += 32) {
+-		writel_relaxed(GICD_INT_EN_CLR_X32,
+-			       base + GIC_DIST_ACTIVE_CLEAR + i / 8);
++		if (!gic_spx4_quirk)
++			writel_relaxed(GICD_INT_EN_CLR_X32,
++				       base + GIC_DIST_ACTIVE_CLEAR + i / 8);
+ 		writel_relaxed(GICD_INT_EN_CLR_X32,
+ 			       base + GIC_DIST_ENABLE_CLEAR + i / 8);
+ 	}
+--- a/drivers/irqchip/irq-gic.c
++++ b/drivers/irqchip/irq-gic.c
+@@ -436,7 +436,11 @@
+ 
+ static bool gic_check_gicv2(void __iomem *base)
+ {
+-	u32 val = readl_relaxed(base + GIC_CPU_IDENT);
++	u32 val;
++
++	if (gic_spx4_quirk)
++		return false;
++	val = readl_relaxed(base + GIC_CPU_IDENT);
+ 	return (val & 0xff0fff) == 0x02043B;
+ }
+ 
+@@ -1380,12 +1384,23 @@
+ 	return false;
+ }
+ 
++static bool gic_enable_spx4_quirk(void *data)
++{
++	gic_spx4_quirk = true;
++	return true;
++}
++
+ static const struct gic_quirk gic_quirks[] = {
+ 	{
+ 		.desc		= "broken byte access",
+ 		.compatible	= "arm,pl390",
+ 		.init		= gic_enable_rmw_access,
+ 	},
++	{
++		.desc		= "Fujisan SPX4 bounded GICv2 register subset",
++		.compatible	= "fujisan,spx4-gic",
++		.init		= gic_enable_spx4_quirk,
++	},
+ 	{ },
+ };
+ 
+@@ -1519,6 +1534,7 @@
+ IRQCHIP_DECLARE(cortex_a15_gic, "arm,cortex-a15-gic", gic_of_init);
+ IRQCHIP_DECLARE(cortex_a9_gic, "arm,cortex-a9-gic", gic_of_init);
+ IRQCHIP_DECLARE(cortex_a7_gic, "arm,cortex-a7-gic", gic_of_init);
++IRQCHIP_DECLARE(fuji_spx4_gic, "fujisan,spx4-gic", gic_of_init);
+ IRQCHIP_DECLARE(msm_8660_qgic, "qcom,msm-8660-qgic", gic_of_init);
+ IRQCHIP_DECLARE(msm_qgic2, "qcom,msm-qgic2", gic_of_init);
+ IRQCHIP_DECLARE(pl390, "arm,pl390", gic_of_init);
+--- a/include/linux/platform_data/simplefb.h
++++ b/include/linux/platform_data/simplefb.h
+@@ -24,6 +24,7 @@
+ 	{ "a8r8g8b8", 32, {16, 8}, {8, 8}, {0, 8}, {24, 8}, DRM_FORMAT_ARGB8888 }, \
+ 	{ "x8b8g8r8", 32, {0, 8}, {8, 8}, {16, 8}, {0, 0}, DRM_FORMAT_XBGR8888 }, \
+ 	{ "a8b8g8r8", 32, {0, 8}, {8, 8}, {16, 8}, {24, 8}, DRM_FORMAT_ABGR8888 }, \
++	{ "r8g8b8a8", 32, {24, 8}, {16, 8}, {8, 8}, {0, 8}, DRM_FORMAT_RGBA8888 }, \
+ 	{ "x2r10g10b10", 32, {20, 10}, {10, 10}, {0, 10}, {0, 0}, DRM_FORMAT_XRGB2101010 }, \
+ 	{ "a2r10g10b10", 32, {20, 10}, {10, 10}, {0, 10}, {30, 2}, DRM_FORMAT_ARGB2101010 }, \
+ }

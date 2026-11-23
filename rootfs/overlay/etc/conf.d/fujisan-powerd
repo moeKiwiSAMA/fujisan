@@ -1,0 +1,4 @@
+# Fujisan OS power & IMX461 thermal thresholds (millidegrees Celsius)
+FUJISAN_THERMAL_WARN_MC="65000"
+FUJISAN_THERMAL_CRIT_MC="80000"
+FUJISAN_POWER_POLL_SEC="5"

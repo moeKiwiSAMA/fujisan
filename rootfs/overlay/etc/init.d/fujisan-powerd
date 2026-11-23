@@ -1,0 +1,43 @@
+#!/sbin/openrc-run
+# Fujisan OS — Power, Thermal & Safe Shutdown Daemon
+# Monitors IMX461 sensor temperature (0x0040/0x0041), battery level, and safe sync.
+
+name="fujisan-powerd"
+description="Fujisan OS power, IMX461 thermal guard, and clean shutdown daemon"
+pidfile="/run/${name}.pid"
+
+: "${FUJISAN_THERMAL_WARN_MC:=65000}"
+: "${FUJISAN_THERMAL_CRIT_MC:=80000}"
+: "${FUJISAN_POWER_POLL_SEC:=5}"
+
+depend() {
+    need localmount
+}
+
+start() {
+    ebegin "Starting ${name}"
+    (
+        echo $$ > "${pidfile}"
+        while true; do
+            temp_mc="$(cat /sys/bus/platform/devices/*imx461*/sensor_temp_mc 2>/dev/null || echo 0)"
+            if [ "$temp_mc" -ge "${FUJISAN_THERMAL_CRIT_MC}" ] 2>/dev/null; then
+                logger -t fujisan-powerd "CRITICAL IMX461 temp=${temp_mc}mC; syncing filesystems" 2>/dev/null || true
+                sync
+            elif [ "$temp_mc" -ge "${FUJISAN_THERMAL_WARN_MC}" ] 2>/dev/null; then
+                logger -t fujisan-powerd "WARNING IMX461 temp=${temp_mc}mC" 2>/dev/null || true
+            fi
+            sleep "${FUJISAN_POWER_POLL_SEC}"
+        done
+    ) >/dev/null 2>&1 &
+    eend 0
+}
+
+stop() {
+    ebegin "Stopping ${name}"
+    sync
+    if [ -f "${pidfile}" ]; then
+        kill "$(cat "${pidfile}")" 2>/dev/null || true
+        rm -f "${pidfile}"
+    fi
+    eend 0
+}

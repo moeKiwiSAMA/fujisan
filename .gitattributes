@@ -1,0 +1,2 @@
+# Preserve unified diff context lines inside kernel patches
+*.patch -whitespace

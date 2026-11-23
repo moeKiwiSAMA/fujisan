@@ -1,0 +1,192 @@
+# SPDX-License-Identifier: GPL-2.0-only
+menu "Fujisan OS — SPX4-MF Medium-Format Camera (SPX4) Platform & Imaging Drivers"
+
+config TIMER_FUJI_SPX4
+	bool "Fujisan SPX4 54 MHz interval timer driver (Ch7-only)"
+	depends on OF
+	select TIMER_OF
+	help
+	  Clocksource and clockevent driver for the SPX4 54 MHz 8-channel
+	  interval timer at 0xFFF3C300 (GIC SPI 64, strictly Ch7-only).
+
+config SERIAL_FUJI_SPX4
+	bool "Fujisan SPX4 UART console, earlycon & BT HCI UART"
+	depends on OF
+	select SERIAL_CORE
+	select SERIAL_CORE_CONSOLE
+	select SERIAL_EARLYCON
+	help
+	  PL011-subset UART driver for SPX4-MF SPX4 UART0/1/2 (0xFFF39000..B000).
+
+config SMP_FUJI_SPX4
+	bool "Fujisan SPX4 Quad-Core Cortex-A7 SMP bring-up"
+	depends on SMP && ARM && OF
+	help
+	  Secondary core bring-up for SPX4-MF quad-core Cortex-A7 SPX4.
+
+config PM_FUJISAN_SPX4
+	bool "Fujisan SPX4 4-layer imaging power-domain & clock controller"
+	depends on OF
+	select PM_GENERIC_DOMAINS
+	help
+	  4-layer imaging PM/clock controller (0xFFF42000 keyed PD 2/4/6-8/9/10/13,
+	  PLL dividers, 0xFFF483xx reset/clk gates, 0xFF70F0xx AXI bus gates).
+
+config GPIO_FUJI_SPX4
+	bool "Fujisan SPX4 16-bank GPIO controller"
+	depends on GPIOLIB && OF
+	help
+	  256-pin (16x16) GPIO controller at 0xFFF41000.
+
+config ADC_FUJI_SPX4
+	bool "Fujisan SPX4 12-channel 12-bit SAR ADC"
+	depends on IIO && OF
+	help
+	  12-channel SAR ADC at 0xFFF40000 (interleaved 0x555/0xAAA scan).
+
+config I2C_FUJI_SPX4
+	bool "Fujisan SPX4 byte-mode I2C master"
+	depends on I2C && OF
+	help
+	  Byte-width I2C master for SPX4 I2C0/1/2 (0xFFF3D000..F000).
+
+config SPI_FUJI_SPX4
+	bool "Fujisan SPX4 SPI master controller"
+	depends on SPI && OF
+	help
+	  SPI master controller for SPX4 SPI0..SPI6 (0xFFF32000..8000).
+
+config DRM_FUJI_SPX4
+	tristate "Fujisan SPX4 LCDC1/LCDC0 DRM/KMS driver"
+	depends on DRM && OF
+	select DRM_KMS_HELPER
+	select DRM_GEM_DMA_HELPER
+	select DRM_FBDEV_EMULATION
+	help
+	  DRM/KMS driver for Rear LCD LCDC1 (0xFFFA9000, 1024x768) and
+	  EVF LCDC0 (0xFFF7A000) with VSYNC IRQ 118 and CMA dumb buffers.
+
+config FUJI_SPX4_VGLIB
+	tristate "Fujisan SPX4 VGLIB 2D fill/blit accelerator"
+	depends on OF
+	help
+	  2D hardware fill/copy accelerator at 0xFFFD0000 (GIC IRQ 92).
+
+config FB_FUJI_SPX4_DOTLCD
+	tristate "SPX4-MF Medium-Format Camera 304x230 Shoulder MIP Sub-LCD framebuffer"
+	depends on FB && OF
+	select FB_DEFERRED_IO
+	select FB_SYS_FOPS
+	select FB_SYS_FILLRECT
+	select FB_SYS_COPYAREA
+	select FB_SYS_IMAGEBLIT
+	help
+	  Secondary 304x230 1-bpp framebuffer for the top shoulder MIP display.
+
+config VIDEO_FUJISAN_IMX461
+	tristate "Fujisan Sony IMX461 102MP CMOS V4L2 subdev (SPI 0xFFF6C200)"
+	depends on VIDEO_DEV && OF
+	select V4L2_FWNODE
+	help
+	  Sony IMX461 102MP CMOS sensor subdev with 0x004F read-gate, temperature
+	  readout (0x0040/0x0041), 25 DAT mode tables, and GPIO power-on sequence.
+
+config VIDEO_FUJISAN_SLVSEC
+	tristate "Fujisan Dual-Bank 8-Lane SLVS-EC RX + PHY + CCDTG driver"
+	depends on VIDEO_DEV && OF
+	help
+	  Dual-bank SLVS-EC RX (0xFFF69000/6A000, IRQs 296/298/297), PHY
+	  (0xFFF6B000), and CCDTG timing generator (0xFFF6C000, IRQs 100/102).
+
+config VIDEO_FUJISAN_CCDIF
+	tristate "Fujisan SPX4 CCDIF V4L2 capture (Semi-Planar LV + RAW + 3A/PDAF)"
+	depends on VIDEO_DEV && OF
+	select VIDEOBUF2_DMA_CONTIG
+	help
+	  CCDIF capture driver supporting semi-planar Y+UV LV Ch0/Ch1
+	  (0xFFF72000/73000), Live RAW+OB Write-DMA (0xFFF6E000), and 20-ch
+	  3A/PDAF stats engine (0xFFF70000 / 0xFFF10000 / 0x2C4B0000).
+
+config VIDEO_FUJISAN_LENSCOM
+	tristate "Fujisan GF-Mount LENSCOM SPI0 Frame32 lens subdev"
+	depends on VIDEO_DEV && SPI && OF
+	help
+	  GF-mount electronic lens controller over SPI0 (0xFFF32000) supporting
+	  S12 sentinel handshake, 128-byte Lens Identity Header, AF, and iris.
+
+config VIDEO_FUJISAN_MALI_V61
+	tristate "Fujisan SPX4 ARM Mali-V61 4K VPU V4L2 M2M (NV12/Y0L2 + LSID MMU)"
+	depends on VIDEO_DEV && OF
+	select VIDEOBUF2_DMA_CONTIG
+	select V4L2_MEM2MEM_DEV
+	help
+	  ARM Mali-V61 4K H.265/H.264 VPU driver at 0xFFE00000 (IRQ 138)
+	  supporting NV12 (0x0201), 10-bit Y0L2 (0x0121), and LSID 2-level MMU.
+
+source "drivers/fujisan-spx4/media/platform/fuji-spx4-jpeg/Kconfig"
+
+config TOUCHSCREEN_FUJI_SPX4
+	tristate "SPX4-MF Medium-Format Camera Rear Capacitive Multi-Touchscreen (I2C2 @ 0x55)"
+	depends on INPUT && I2C && OF
+	help
+	  Multi-touch driver for the SPX4-MF rear LCD touchscreen on I2C2 @ 0x55.
+
+config INPUT_FUJI_SPX4
+	tristate "SPX4-MF Medium-Format Camera Physical Keys, 8-Way Stick & Command Dials"
+	depends on INPUT && OF && ADC_FUJI_SPX4
+	help
+	  Unified evdev input driver exposing fuji-spx4-keys and fuji-spx4-dials.
+
+config SND_SOC_FUJI_SPX4_I2S
+	tristate "Fujisan SPX4 Dual-Channel I2S/PCM CPU DAI"
+	depends on SND_SOC && OF
+	help
+	  ALSA SoC I2S DAI driver for 0xFFF4F000 (ch0) and 0xFFF78000 (ch1).
+
+config SND_SOC_FUJI_WM8962_SPI
+	tristate "SPX4-MF Medium-Format Camera WM8962 SPI4 Codec Driver"
+	depends on SND_SOC && SPI && OF
+	help
+	  WM8962/WM8962B 16-bit SPI4 audio codec driver (R15=0x6243).
+
+config SND_SOC_FUJISAN_SPX4_AUDIO
+	tristate "SPX4-MF Medium-Format Camera ALSA SoC Machine Card"
+	depends on SND_SOC_FUJI_SPX4_I2S && SND_SOC_FUJI_WM8962_SPI
+	help
+	  Machine driver linking I2S0 <-> WM8962 SPI4 with 3.5mm jack detect.
+
+config MMC_SDHCI_FUJI_SPX4
+	tristate "Fujisan SPX4 SDXC & SDIO SDHCI Platform Driver"
+	depends on MMC_SDHCI_PLTFM && OF
+	select MMC_SDHCI_IO_ACCESSORS
+	help
+	  SDHCI platform glue for dual SDXC slots (0xFFFC4000/8000) and
+	  BCM43438A1 SDIO Wi-Fi (0xFFFC0000).
+
+config POWER_FUJI_SPX4
+	tristate "SPX4-MF Medium-Format Camera Power-Peer SPI1 & Battery Telemetry"
+	depends on SPI && POWER_SUPPLY && ADC_FUJI_SPX4 && OF
+	select NVMEM
+	help
+	  4-byte checksum SPI1 power-peer transport, NP-W235 battery telemetry,
+	  8-byte checksummed retained NVMEM, and clean camera power-off.
+
+config RTC_DRV_FUJI_SPX4
+	tristate "SPX4-MF Medium-Format Camera Hardware RTC (via Power-Peer SPI1)"
+	depends on RTC_CLASS && POWER_FUJI_SPX4 && OF
+	help
+	  Hardware RTC driver (2000-01-01 epoch, selectors 0x1D/1E/23/24/27).
+
+config SENSORS_FUJI_SPX4_TEMP
+	tristate "Fujisan SPX4 SoC Die Temperature Sensor (hwmon)"
+	depends on HWMON && OF
+	help
+	  Hardware monitoring driver for SPX4 temperature converter (0xFFF47810).
+
+config USB_DWC3_FUJI_SPX4
+	tristate "Fujisan SPX4 Synopsys DWC3 USB 3.0 DRD/Gadget Glue"
+	depends on USB_DWC3 && OF
+	help
+	  DWC3 platform glue at 0xFFB00000 (IRQ 246) with GHWPARAMS0 DRD probe.
+
+endmenu
