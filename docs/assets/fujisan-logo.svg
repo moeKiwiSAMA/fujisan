@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192" role="img" aria-labelledby="title desc">
+  <title id="title">Fujisan OS</title>
+  <desc id="desc">A snow-capped Mount Fuji and a coral sun framed by a camera viewfinder.</desc>
+  <rect x="8" y="8" width="176" height="176" rx="44" fill="#14283A"/>
+  <path d="M66 46H54a8 8 0 0 0-8 8v12m80-20h12a8 8 0 0 1 8 8v12M46 126v12a8 8 0 0 0 8 8h12m80-20v12a8 8 0 0 1-8 8h-12"
+        fill="none" stroke="#96B5CA" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="124" cy="73" r="11" fill="#FF8C79"/>
+  <path d="M56 125l29-52a5 5 0 0 1 9 0l12 23 10 8 19 21a3 3 0 0 1-2 5H59a3 3 0 0 1-3-5Z" fill="#70C5F1"/>
+  <path d="M90 71a5 5 0 0 1 4 2l12 23-10-4-6 5-7-5-11 4 13-23a5 5 0 0 1 5-2Z" fill="#EAF6FF"/>
+</svg>

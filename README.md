@@ -3,7 +3,15 @@
 >
 > This repository contains experimental, heavily AI-generated bootloader configurations, Linux kernel drivers, device trees, and low-level hardware code. **Running custom bootloaders, kernels, device trees, or hardware drivers on physical camera hardware can permanently brick the device, corrupt factory calibration or NVRAM, or cause hardware failure.** This project is provided strictly **"AS IS"** without warranty of any kind (see [LICENSE](LICENSE)). The authors and contributors accept **zero liability** for any device damage, malfunction, or data loss.
 
-# Fujisan OS
+<p align="center">
+  <img src="docs/assets/fujisan-logo.svg" alt="Fujisan OS Logo" width="144" height="144" />
+</p>
+
+<h1 align="center">Fujisan OS</h1>
+
+<p align="center">
+  <strong>Clean-room pure-ARM32 Alpine Linux (<code>armv7</code>) for SPX4-MF medium-format camera platforms</strong>
+</p>
 
 **Fujisan OS** is a clean-room, pure-ARM32 Alpine Linux (`armv7`) operating system built for **SPX4-MF** medium-format camera platforms (**SPX4** quad-core ARM Cortex-A7 SoC + **IMX461** 102 MP CMOS sensor). It boots non-destructively via **`banban-injector` (`B:\BANBANINJ`)** from SD Card Slot 2 with **zero proprietary firmware binaries** in the repository and **strict read-only protection of NOR Flash factory calibration and BKUP partitions**.
 
