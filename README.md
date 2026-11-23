@@ -4,7 +4,7 @@
 > This repository contains experimental, heavily AI-generated bootloader configurations, Linux kernel drivers, device trees, and low-level hardware code. **Running custom bootloaders, kernels, device trees, or hardware drivers on physical camera hardware can permanently brick the device, corrupt factory calibration or NVRAM, or cause hardware failure.** This project is provided strictly **"AS IS"** without warranty of any kind (see [LICENSE](LICENSE)). The authors and contributors accept **zero liability** for any device damage, malfunction, or data loss.
 
 <p align="center">
-  <img src="docs/assets/fujisan-logo.svg" alt="Fujisan OS Logo" width="144" height="144" />
+  <img src="assets/logo.png" alt="Fujisan OS Logo" width="144" height="144" />
 </p>
 
 <h1 align="center">Fujisan OS</h1>
